@@ -1,12 +1,11 @@
-use starknet::ContractAddress;
-use super::song_marketplace::Song;
+use cairofy_contract::structs::Structs::Song;
 
 #[starknet::interface]
-pub trait ISongMarketplace<TContractState> {
+pub trait ICairofy<TContractState> {
     fn register_song(
         ref self: TContractState,
-        song_name: felt252,
-        song_ipfs_hash: felt252,
+        name: felt252,
+        ipfs_hash: felt252,
         preview_ipfs_hash: felt252,
         price: u256,
         for_sale: bool,

@@ -1,73 +1,107 @@
-use starknet::ContractAddress;
-use super::interface::ISongMarketplace;
-
-#[derive(Clone, Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
-pub struct Song {
-    name: felt252,
-    ipfs_hash: felt252,
-    preview_ipfs_hash: felt252,
-    price: u256,
-    owner: ContractAddress,
-    for_sale: bool,
-}
-
+// SPDX-License-Identifier: MIT
+// Compatible with OpenZeppelin Contracts for Cairo ^1.0.0
 #[starknet::contract]
-mod SongMarketplace {
-    use OwnableComponent::InternalTrait;
+mod CairofyV0 {
+    use cairofy_contract::interfaces::ICairofy::ICairofy;
+    use cairofy_contract::structs::Structs::Song;
     use openzeppelin::access::ownable::OwnableComponent;
+    use openzeppelin::security::pausable::PausableComponent;
+    use openzeppelin::upgrades::UpgradeableComponent;
+    use openzeppelin::upgrades::interface::IUpgradeable;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
-    use starknet::{ContractAddress, get_caller_address};
-    use super::{ISongMarketplace, Song};
+    use starknet::{ClassHash, ContractAddress, get_caller_address};
 
-
+    component!(path: PausableComponent, storage: pausable, event: PausableEvent);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
-    // Ownable Mixin
+    // External
+    #[abi(embed_v0)]
+    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
     #[abi(embed_v0)]
     impl OwnableMixinImpl = OwnableComponent::OwnableMixinImpl<ContractState>;
-    impl InternalImpl = OwnableComponent::InternalImpl<ContractState>;
+
+    // Internal
+    impl PausableInternalImpl = PausableComponent::InternalImpl<ContractState>;
+    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[storage]
     struct Storage {
+        #[substorage(v0)]
+        pausable: PausableComponent::Storage,
+        #[substorage(v0)]
+        ownable: OwnableComponent::Storage,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
+        // contract storage
         songs: Map<u64, Song>,
         song_count: u64,
         user_songs: Map<(ContractAddress, u64), bool>,
         user_song_count: Map<ContractAddress, u64>,
         user_song_ids: Map<(ContractAddress, u64), u64>,
-        #[substorage(v0)]
-        ownable: OwnableComponent::Storage,
     }
 
     #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
         #[flat]
+        PausableEvent: PausableComponent::Event,
+        #[flat]
         OwnableEvent: OwnableComponent::Event,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event,
+        // contract events
     }
 
     #[constructor]
     fn constructor(ref self: ContractState, owner: ContractAddress) {
         self.ownable.initializer(owner);
-        self.song_count.write(0);
     }
 
+    #[generate_trait]
+    #[abi(per_item)]
+    impl ExternalImpl of ExternalTrait {
+        #[external(v0)]
+        fn pause(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+            self.pausable.pause();
+        }
+
+        #[external(v0)]
+        fn unpause(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+            self.pausable.unpause();
+        }
+    }
+
+    // Upgradeable
     #[abi(embed_v0)]
-    impl SongMarketplaceImpl of ISongMarketplace<ContractState> {
+    impl UpgradeableImpl of IUpgradeable<ContractState> {
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.ownable.assert_only_owner();
+            self.upgradeable.upgrade(new_class_hash);
+        }
+    }
+
+    // contract Implementation
+    #[abi(embed_v0)]
+    impl CairofyImpl of ICairofy<ContractState> {
         fn register_song(
             ref self: ContractState,
-            song_name: felt252,
-            song_ipfs_hash: felt252,
+            name: felt252,
+            ipfs_hash: felt252,
             preview_ipfs_hash: felt252,
             price: u256,
             for_sale: bool,
         ) -> u64 {
             let caller = get_caller_address();
 
-            assert!(song_name != 0, "Song name cannot be empty");
-            assert!(song_ipfs_hash != 0, "Your song hash cannot be empty");
+            assert!(name != 0, "Song name cannot be empty");
+            assert!(ipfs_hash != 0, "Your song hash cannot be empty");
             assert!(preview_ipfs_hash != 0, "Your song preview hash cannot be empty");
 
             // Increment song count and return the new song ID
@@ -75,8 +109,8 @@ mod SongMarketplace {
             self.song_count.write(song_id + 1);
 
             let song = Song {
-                name: song_name,
-                ipfs_hash: song_ipfs_hash,
+                name: name,
+                ipfs_hash: ipfs_hash,
                 preview_ipfs_hash: preview_ipfs_hash,
                 price: price,
                 owner: caller,
