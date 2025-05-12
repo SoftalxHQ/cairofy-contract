@@ -261,7 +261,7 @@ fn test_buy_song_by_owner() {
 
     let old_owner = dispatcher.get_song_info(song_id).owner;
     assert(old_owner == TEST_OWNER1(), 'wrong owner');
-    
+
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
     dispatcher.buy_song(song_id);
     let new_owner = dispatcher.get_song_info(song_id).owner;
