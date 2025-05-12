@@ -18,6 +18,7 @@ pub mod contracts {
 pub mod events {
     pub mod Events;
 }
+pub mod STARKTOKEN;
 // ***** END OF IMPORTS *****
 
 
