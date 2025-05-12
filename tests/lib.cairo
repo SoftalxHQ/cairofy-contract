@@ -43,7 +43,9 @@ fn deploy_contract() -> (ICairofyDispatcher, IERC20Dispatcher) {
 
     // Deploy Cairofy contract
     let contract_class = declare("CairofyV0").unwrap().contract_class();
-    let (cairofy_address, _) = contract_class.deploy(@array![OWNER().into(), erc20_address.into()]).unwrap();
+    let (cairofy_address, _) = contract_class
+        .deploy(@array![OWNER().into(), erc20_address.into()])
+        .unwrap();
 
     let dispatcher = ICairofyDispatcher { contract_address: cairofy_address };
 
