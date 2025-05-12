@@ -264,7 +264,7 @@ fn test_buy_song_by_owner() {
 // CaxtonStone Start
 #[test]
 fn test_get_user_songs_empty() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
 
     let user_felt: felt252 = 0x12345.into();
     let user: ContractAddress = user_felt.try_into().unwrap();
@@ -277,7 +277,7 @@ fn test_get_user_songs_empty() {
 
 #[test]
 fn test_get_user_songs_single() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
 
     let user_felt: felt252 = 0x12345.into();
     let user: ContractAddress = user_felt.try_into().unwrap();
@@ -300,7 +300,7 @@ fn test_get_user_songs_single() {
 
 #[test]
 fn test_get_user_songs_multiple() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     let user_felt: felt252 = 0x12345.into();
     let user: ContractAddress = user_felt.try_into().unwrap();
     // Set the caller to the test user
@@ -331,7 +331,7 @@ fn test_get_user_songs_multiple() {
 
 #[test]
 fn test_is_song_owner_true() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
 
     let user_felt: felt252 = 0x12345.into();
     let user: ContractAddress = user_felt.try_into().unwrap();
@@ -356,7 +356,7 @@ fn test_is_song_owner_true() {
 #[test]
 #[should_panic(expect: 'Non-owner should not be owner')]
 fn test_is_song_owner_false() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
 
     // user addresses
     let owner_felt: felt252 = 0x12345.into();
@@ -387,7 +387,7 @@ fn test_is_song_owner_false() {
 
 #[test]
 fn test_is_song_owner_invalid_id() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
 
     // user address
     let user_felt: felt252 = 0x12345.into();
