@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Compatible with OpenZeppelin Contracts for Cairo ^1.0.0
 #[starknet::contract]
-mod CairofyV0 {
+pub mod CairofyV0 {
+    use cairofy_contract::events::Events::{SongPriceUpdated, Song_Registered};
     use cairofy_contract::interfaces::ICairofy::ICairofy;
     use cairofy_contract::structs::Structs::Song;
     use openzeppelin::access::ownable::OwnableComponent;
@@ -47,7 +48,7 @@ mod CairofyV0 {
 
     #[event]
     #[derive(Drop, starknet::Event)]
-    enum Event {
+    pub enum Event {
         #[flat]
         PausableEvent: PausableComponent::Event,
         #[flat]
@@ -55,6 +56,8 @@ mod CairofyV0 {
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
         // contract events
+        Song_Registered: Song_Registered,
+        SongPriceUpdated: SongPriceUpdated,
     }
 
     #[constructor]
@@ -103,10 +106,10 @@ mod CairofyV0 {
             assert!(name != 0, "Song name cannot be empty");
             assert!(ipfs_hash != 0, "Your song hash cannot be empty");
             assert!(preview_ipfs_hash != 0, "Your song preview hash cannot be empty");
-
+            assert!(price > 0, "Price must be greater than 0");
             // Increment song count and return the new song ID
-            let song_id = self.song_count.read();
-            self.song_count.write(song_id + 1);
+            let song_id = self.song_count.read() + 1;
+            self.song_count.write(song_id);
 
             let song = Song {
                 name: name,
@@ -124,6 +127,22 @@ mod CairofyV0 {
             self.user_songs.write((caller, song_id), true);
             self.user_song_ids.write((caller, user_song_count), song_id);
             self.user_song_count.write(caller, user_song_count + 1);
+
+            self.song_count.write(song_id);
+
+            self
+                .emit(
+                    Event::Song_Registered(
+                        Song_Registered {
+                            song_id: song_id,
+                            name: name,
+                            ipfs_hash: ipfs_hash,
+                            preview_ipfs_hash: preview_ipfs_hash,
+                            price: price,
+                            for_sale: for_sale,
+                        },
+                    ),
+                );
             song_id
         }
 
@@ -131,7 +150,7 @@ mod CairofyV0 {
         fn get_song_info(self: @ContractState, song_id: u64) -> Song {
             // Check if the song_id is valid
             let total_songs = self.song_count.read();
-            assert!(song_id < total_songs, "Song ID does not exist");
+            assert!(song_id <= total_songs, "Song ID does not exist");
 
             // Read and return the song information from storage
             self.songs.read(song_id)
@@ -141,25 +160,46 @@ mod CairofyV0 {
         fn update_song_price(ref self: ContractState, song_id: u64, new_price: u256) {
             // Check if the song_id is valid
             let total_songs = self.song_count.read();
-            assert!(song_id < total_songs, "Song ID does not exist");
+            assert!(song_id <= total_songs, "Song ID does not exist");
             let mut song = self.songs.read(song_id);
+            assert!(new_price > 0, "Price must be greater than 0");
 
             //Verify that the caller is the owner of the song
             let caller = get_caller_address();
             assert!(song.owner == caller, "Only the owner can update the song price");
 
-            // Create new song instance with updated price
-            song.price = new_price;
+            let song = Song {
+                name: song.name,
+                ipfs_hash: song.ipfs_hash,
+                preview_ipfs_hash: song.preview_ipfs_hash,
+                price: new_price,
+                owner: caller,
+                for_sale: song.for_sale,
+            };
 
-            // Write the updated song back to storage
+            //store the song in the contract storage
             self.songs.write(song_id, song);
+
+            self
+                .emit(
+                    Event::SongPriceUpdated(
+                        SongPriceUpdated {
+                            song_id: song_id,
+                            name: song.name,
+                            ipfs_hash: song.ipfs_hash,
+                            preview_ipfs_hash: song.preview_ipfs_hash,
+                            updated_price: song.price,
+                            for_sale: song.for_sale,
+                        },
+                    ),
+                );
         }
 
         // TODO: Implement function to get the preview hash of a song
         fn get_preview(self: @ContractState, song_id: u64) -> felt252 {
             // Validate song ID
             let total_songs = self.song_count.read();
-            assert!(song_id < total_songs, "Song ID does not exist");
+            assert!(song_id <= total_songs, "Song ID does not exist");
 
             // Return preview IPFS hash
             let song = self.songs.read(song_id);
@@ -172,7 +212,7 @@ mod CairofyV0 {
 
             // Validate song ID
             let total_songs = self.song_count.read();
-            assert!(song_id < total_songs, "Song ID does not exist");
+            assert!(song_id <= total_songs, "Song ID does not exist");
 
             let mut song = self.songs.read(song_id);
             assert!(song.for_sale, "Song is not for sale");
@@ -193,9 +233,7 @@ mod CairofyV0 {
             song.for_sale = false;
             self.songs.write(song_id, song);
 
-            // Transfer contract ownership to the buyer
-            // This is the ONLY way ownership can change
-            self.ownable.transfer_ownership(buyer);
+            // self.ownable.transfer_ownership(buyer);
 
             song.ipfs_hash
         }
