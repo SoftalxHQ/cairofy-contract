@@ -5,6 +5,7 @@ pub mod CairofyV0 {
     use cairofy_contract::events::Events::{SongPriceUpdated, Song_Registered};
     use cairofy_contract::interfaces::ICairofy::ICairofy;
     use cairofy_contract::structs::Structs::Song;
+    use core::num::traits::Zero;
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::security::pausable::PausableComponent;
     use openzeppelin::token::erc20::interface::{
@@ -18,6 +19,7 @@ pub mod CairofyV0 {
         StoragePointerWriteAccess,
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address};
+    // use OwnableComponent::InternalTrait;
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -243,10 +245,40 @@ pub mod CairofyV0 {
 
             song.ipfs_hash
         }
-        // TODO: Implement function to fetch songs owned by a specific user
-    // fn get_user_songs(...) -> Array<u64> { ... }
 
-        // TODO: Implement function to check if a user is the owner of a song
-    // fn is_song_owner(...) -> bool { ... }
+        fn get_user_songs(self: @ContractState, user: ContractAddress) -> Array<u64> {
+            let caller = get_caller_address();
+            assert(!caller.is_zero(), 'ZERO_ADDRESS_CALLER');
+            // get the count of songs for the user
+            let user_song_count = self.user_song_count.read(user);
+            // create an array to store the song IDs
+            let mut song_ids = ArrayTrait::new();
+            // iterate through the user's songs
+            let mut i: u64 = 0;
+            while i < user_song_count {
+                let song_id = self.user_song_ids.read((user, i));
+                song_ids.append(song_id);
+                i += 1;
+            }
+
+            song_ids
+        }
+
+        fn is_song_owner(self: @ContractState, song_id: u64) -> bool {
+            // check if the song ID is valid
+            let user = get_caller_address();
+            assert(!user.is_zero(), 'ZERO_ADDRESS_CALLER');
+            assert(!song_id.is_zero(), 'ZERO_SONG_ID');
+
+            // check if the song ID is valid
+            let total_songs = self.song_count.read();
+            if song_id > total_songs {
+                return false;
+            }
+
+            // check if the user is the owner of the song
+            let song = self.songs.read(song_id);
+            song.owner == user
+        }
     }
 }
