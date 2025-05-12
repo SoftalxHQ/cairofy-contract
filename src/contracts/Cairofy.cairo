@@ -8,6 +8,10 @@ pub mod CairofyV0 {
     use core::num::traits::Zero;
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::security::pausable::PausableComponent;
+    use openzeppelin::token::erc20::interface::{
+        ERC20ABIDispatcher, ERC20ABIDispatcherTrait, IERC20Dispatcher, IERC20DispatcherTrait,
+        IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait,
+    };
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use starknet::storage::{
@@ -46,6 +50,7 @@ pub mod CairofyV0 {
         user_songs: Map<(ContractAddress, u64), bool>,
         user_song_count: Map<ContractAddress, u64>,
         user_song_ids: Map<(ContractAddress, u64), u64>,
+        token_addr: ContractAddress,
     }
 
     #[event]
@@ -63,8 +68,9 @@ pub mod CairofyV0 {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, owner: ContractAddress) {
+    fn constructor(ref self: ContractState, owner: ContractAddress, token_addr: ContractAddress) {
         self.ownable.initializer(owner);
+        self.token_addr.write(token_addr);
     }
 
     #[generate_trait]

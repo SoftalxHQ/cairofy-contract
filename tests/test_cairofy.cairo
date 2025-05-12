@@ -8,6 +8,7 @@ use snforge_std::{
     stop_cheat_caller_address, test_address,
 };
 use starknet::{ContractAddress, contract_address_const};
+use super::*;
 
 fn OWNER() -> ContractAddress {
     contract_address_const::<'owner'>()
@@ -29,23 +30,14 @@ fn TEST_OWNER3() -> ContractAddress {
     contract_address_const::<'test_owner3'>()
 }
 
-fn deploy_contract() -> ICairofyDispatcher {
-    let contract_class = declare("CairofyV0").unwrap().contract_class();
-    let (cairofy_address, _) = contract_class.deploy(@array![OWNER().into()]).unwrap();
-
-    let dispatcher = ICairofyDispatcher { contract_address: cairofy_address };
-
-    dispatcher
-}
-
 fn register_default_song() -> u64 {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     let song_id = dispatcher.register_song('name', 'hashin song', 'preview hash', 30, true);
     song_id
 }
 #[test]
 fn test_register_song() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
 
     assert(song_id == 1, 'Song ID should be 1');
@@ -59,7 +51,7 @@ fn test_register_song() {
 
 #[test]
 fn test_register_song_event() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     let mut spy = spy_events();
 
     let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
@@ -95,31 +87,31 @@ fn test_register_song_event() {
 #[test]
 #[should_panic(expect: "Song name cannot be empty")]
 fn test_register_empty_song_name() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     dispatcher.register_song('', 'i dont know', 'cohort 4', 20, true);
 }
 #[test]
 #[should_panic(expect: "Your song hash cannot be empty")]
 fn test_register_empty_song_hash() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     dispatcher.register_song('why me', '', 'cohort 4', 20, true);
 }
 #[test]
 #[should_panic(expect: "Your song preview hash cannot be empty")]
 fn test_register_empty_preview_song_hash() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     dispatcher.register_song('why me', 'i dont know', '', 20, true);
 }
 #[test]
 #[should_panic(expect: "Price must be greater than 0")]
 fn test_register_song_zero_price() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     dispatcher.register_song('why me', 'i dont know', 'cohort 4', 0, true);
 }
 
 #[test]
 fn test_update_song_price() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
 
     dispatcher.update_song_price(song_id, 500);
@@ -134,7 +126,7 @@ fn test_update_song_price() {
 #[test]
 #[should_panic(expect: "Song ID does not exist")]
 fn test_update_song_price_invalid_ID() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
 
     dispatcher.update_song_price(10, 500);
@@ -143,7 +135,7 @@ fn test_update_song_price_invalid_ID() {
 #[test]
 #[should_panic(expect: "Price must be greater than 0")]
 fn test_update_song_price_invalid_price() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
 
     let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
@@ -154,7 +146,7 @@ fn test_update_song_price_invalid_price() {
 
 #[test]
 fn test_update_song_price_owner() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
 
     let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
@@ -171,7 +163,7 @@ fn test_update_song_price_owner() {
 #[test]
 #[should_panic(expect: "Only the owner can update the song price")]
 fn test_update_song_price_non_owner() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
 
     let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
@@ -182,7 +174,7 @@ fn test_update_song_price_non_owner() {
 
 #[test]
 fn test_update_song_price_event() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     let mut spy = spy_events();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
     let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
@@ -220,7 +212,7 @@ fn test_update_song_price_event() {
 #[test]
 #[should_panic(expect: "Song is not for sale")]
 fn test_buy_song_not_for_sale() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
     let song_id = dispatcher
         .register_song('tirin tirin tirin', 'i dont know', 'cohort 4', 20, false);
@@ -235,7 +227,7 @@ fn test_buy_song_not_for_sale() {
 
 #[test]
 fn test_buy_song() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
     let song_id = dispatcher
         .register_song('tirin tirin tirin', 'i dont know', 'cohort 4', 20, true);
@@ -255,7 +247,7 @@ fn test_buy_song() {
 #[test]
 #[should_panic(expect: "You can't buy your own song")]
 fn test_buy_song_by_owner() {
-    let dispatcher = deploy_contract();
+    let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
     let song_id = dispatcher
         .register_song('tirin tirin tirin', 'i dont know', 'cohort 4', 20, true);
