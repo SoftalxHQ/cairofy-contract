@@ -16,5 +16,5 @@ pub trait ICairofy<TContractState> {
     fn get_preview(self: @TContractState, song_id: u64) -> felt252;
     fn buy_song(ref self: TContractState, song_id: u64) -> felt252;
     fn get_user_songs(self: @TContractState, user: ContractAddress) -> Array<u64>;
-    fn is_song_owner(self: @TContractState, user: ContractAddress, song_id: u64) -> bool;
+    fn is_song_owner(self: @TContractState, song_id: u64) -> bool;
 }

@@ -1,12 +1,12 @@
 use cairofy_contract::contracts::Cairofy::CairofyV0;
 use cairofy_contract::events::Events::{SongPriceUpdated, Song_Registered};
 use cairofy_contract::interfaces::ICairofy::{ICairofyDispatcher, ICairofyDispatcherTrait};
+use core::array::Array;
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
     start_cheat_block_timestamp, start_cheat_caller_address, stop_cheat_block_timestamp,
     stop_cheat_caller_address, test_address,
 };
-use core::array::Array;
 use starknet::{ContractAddress, contract_address_const};
 
 fn OWNER() -> ContractAddress {
@@ -349,9 +349,13 @@ fn test_is_song_owner_true() {
     let song_id = dispatcher
         .register_song('My Song', 'my_ipfs_hash', 'my_preview_hash', 1000_u256, false);
 
-    // Check if the user is the owner of the song
-    let is_owner = dispatcher.is_song_owner(user, song_id);
+    let song = dispatcher.get_song_info(song_id);
 
+    println!("song: {:?}", song);
+
+    // Check if the user is the owner of the song
+    let is_owner = dispatcher.is_song_owner(song_id);
+    println!("is_owner: {:?}", is_owner);
     assert(is_owner, 'User should be the owner');
 
     stop_cheat_caller_address(dispatcher.contract_address);
@@ -381,7 +385,7 @@ fn test_is_song_owner_false() {
     start_cheat_caller_address(dispatcher.contract_address, non_owner);
 
     // check if the non-owner is the owner of the song
-    let is_owner = dispatcher.is_song_owner(non_owner, song_id);
+    let is_owner = dispatcher.is_song_owner(song_id);
 
     // the non-owner should not be the owner
     assert(is_owner, 'Non-owner should not be owner');
@@ -397,11 +401,16 @@ fn test_is_song_owner_invalid_id() {
     let user_felt: felt252 = 0x12345.into();
     let user: ContractAddress = user_felt.try_into().unwrap();
 
+    start_cheat_caller_address(dispatcher.contract_address, user);
+
     // check if the user is the owner of a song with an invalid ID
-    let is_owner = dispatcher.is_song_owner(user, 9999);
+    let is_owner = dispatcher.is_song_owner(9999);
 
     // should return false for invalid song ID
     assert(!is_owner, 'Should be false for invalid ID');
-}
 
+    stop_cheat_caller_address(dispatcher.contract_address);
+}
 // CaxtonStone Stop
+
+

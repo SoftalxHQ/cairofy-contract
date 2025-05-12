@@ -5,6 +5,7 @@ pub mod CairofyV0 {
     use cairofy_contract::events::Events::{SongPriceUpdated, Song_Registered};
     use cairofy_contract::interfaces::ICairofy::ICairofy;
     use cairofy_contract::structs::Structs::Song;
+    use core::num::traits::Zero;
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::security::pausable::PausableComponent;
     use openzeppelin::upgrades::UpgradeableComponent;
@@ -14,7 +15,6 @@ pub mod CairofyV0 {
         StoragePointerWriteAccess,
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address};
-    use core::num::traits::Zero;
     // use OwnableComponent::InternalTrait;
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
@@ -258,12 +258,18 @@ pub mod CairofyV0 {
             song_ids
         }
 
-        fn is_song_owner(self: @ContractState, user: ContractAddress, song_id: u64) -> bool {
+        fn is_song_owner(self: @ContractState, song_id: u64) -> bool {
+            // check if the song ID is valid
+            let user = get_caller_address();
+            assert(!user.is_zero(), 'ZERO_ADDRESS_CALLER');
+            assert(!song_id.is_zero(), 'ZERO_SONG_ID');
+
             // check if the song ID is valid
             let total_songs = self.song_count.read();
-            if song_id >= total_songs {
+            if song_id > total_songs {
                 return false;
             }
+
             // check if the user is the owner of the song
             let song = self.songs.read(song_id);
             song.owner == user
