@@ -1,4 +1,5 @@
 pub mod test_cairofy;
+pub mod test_payment;
 use cairofy_contract::contracts::Cairofy::CairofyV0;
 use cairofy_contract::events::Events::{SongPriceUpdated, Song_Registered};
 use cairofy_contract::interfaces::ICairofy::{ICairofyDispatcher, ICairofyDispatcherTrait};
@@ -51,3 +52,4 @@ fn deploy_contract() -> (ICairofyDispatcher, IERC20Dispatcher) {
 
     (dispatcher, erc_20_dispatcher)
 }
+
