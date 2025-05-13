@@ -356,7 +356,104 @@ fn test_is_song_owner_invalid_id() {
 
     stop_cheat_caller_address(dispatcher.contract_address);
 }
+// CaxtonStone Stop
 
+#[test]
+fn test_get_popular_songs_stats_limited() {
+    let (dispatcher, _) = deploy_contract();
+
+    start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
+
+    dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
+
+    let limit: u64 = 1;
+    let popular_songs = dispatcher.get_popular_songs_stats(limit);
+
+    println!("{:?}", popular_songs.len());
+    assert(popular_songs.len() == limit.try_into().unwrap(), 'Incorrect number of songs');
+}
+
+#[test]
+fn test_get_popular_songs_all_songs() {
+    let (dispatcher, _) = deploy_contract();
+
+    start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
+
+    dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
+
+    let total_songs = dispatcher.get_song_count();
+    let limit: u64 = total_songs;
+
+    let popular_songs = dispatcher.get_popular_songs_stats(limit);
+
+    // Assert that the number of returned songs matches total songs
+    assert(popular_songs.len() == total_songs.try_into().unwrap(), 'Should return all songs');
+}
+
+#[test]
+fn test_get_popular_songs_song_ids() {
+    let (dispatcher, _) = deploy_contract();
+
+    start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
+
+    dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
+
+    let limit: u64 = 1;
+    let popular_songs = dispatcher.get_popular_songs_stats(limit);
+
+    // Check that song IDs are sequential and start from 1
+    let mut i: u64 = 0;
+    while i < popular_songs.len().try_into().unwrap() {
+        // Song ID should match its index + 1
+        let song = popular_songs.get(i.try_into().unwrap()).unwrap();
+        assert(song.song_id == i + 1, 'Incorrect song ID');
+
+        assert(song.play_count == 0, 'Play count should be zero');
+        assert(song.revenue_generated == 0, 'Revenue should be zero');
+
+        i += 1;
+    }
+}
+
+#[test]
+fn test_get_popular_songs_no_songs() {
+    let (dispatcher, _) = deploy_contract();
+
+    dispatcher.get_song_count();
+
+    let limit: u64 = 5;
+    let popular_songs = dispatcher.get_popular_songs_stats(limit);
+
+    // Assert that no songs are returned
+    assert(popular_songs.len() == 0, 'Should return empty array');
+}
+
+#[test]
+fn test_get_popular_songs_large_limit() {
+    let (dispatcher, _) = deploy_contract();
+
+    let large_limit: u64 = 1000;
+
+    dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
+
+    let popular_songs = dispatcher.get_popular_songs_stats(large_limit);
+
+    // Should not return more songs than exist in the contract
+    let total_songs = dispatcher.get_song_count();
+    assert(popular_songs.len() == total_songs.try_into().unwrap(), 'Should return all songs');
+}
+
+#[test]
+fn test_get_platform_stats_zero_values() {
+    let (dispatcher, _) = deploy_contract();
+
+    // Call the function under test
+    let stats = dispatcher.get_platform_stats();
+
+    // Verify the returned PlatformStats contains expected values
+    assert(stats.total_suscribers == 0, 'Subscriber count mismatch');
+    assert(stats.platform_revenue == 0, 'Revenue mismatch');
+}
 #[test]
 fn test_get_all_songs() {
     let (dispatcher, _) = deploy_contract();
