@@ -11,3 +11,18 @@ pub struct Song {
     pub for_sale: bool,
 }
 
+#[derive(Clone, Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
+pub struct UserSubscription {
+    pub start_date: u64,
+    pub expiry_date: u64,
+    pub user: ContractAddress,
+    pub subscription_id: u64,
+    pub user_id: u256,
+}
+
+#[derive(Clone, Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
+pub struct User {
+    pub user: ContractAddress,
+    pub has_subscribed: bool,
+    pub user_id: u256,
+}

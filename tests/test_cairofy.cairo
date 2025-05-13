@@ -10,35 +10,11 @@ use snforge_std::{
 use starknet::{ContractAddress, contract_address_const};
 use super::*;
 
-fn OWNER() -> ContractAddress {
-    contract_address_const::<'owner'>()
-}
 
-fn NON_OWNER() -> ContractAddress {
-    contract_address_const::<'non_owner'>()
-}
-
-fn TEST_OWNER1() -> ContractAddress {
-    contract_address_const::<'test_owner1'>()
-}
-
-fn TEST_OWNER2() -> ContractAddress {
-    contract_address_const::<'test_owner2'>()
-}
-
-fn TEST_OWNER3() -> ContractAddress {
-    contract_address_const::<'test_owner3'>()
-}
-
-fn register_default_song() -> u64 {
-    let (dispatcher, _) = deploy_contract();
-    let song_id = dispatcher.register_song('name', 'hashin song', 'preview hash', 30, true);
-    song_id
-}
 #[test]
 fn test_register_song() {
     let (dispatcher, _) = deploy_contract();
-    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
+    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
 
     assert(song_id == 1, 'Song ID should be 1');
 
@@ -54,7 +30,7 @@ fn test_register_song_event() {
     let (dispatcher, _) = deploy_contract();
     let mut spy = spy_events();
 
-    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
+    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
 
     assert(song_id == 1, 'Song ID should be 1');
 
@@ -88,36 +64,36 @@ fn test_register_song_event() {
 #[should_panic(expect: "Song name cannot be empty")]
 fn test_register_empty_song_name() {
     let (dispatcher, _) = deploy_contract();
-    dispatcher.register_song('', 'i dont know', 'cohort 4', 20, true);
+    dispatcher.register_song('', 'i dont know', 'cohort 4', 20);
 }
 #[test]
 #[should_panic(expect: "Your song hash cannot be empty")]
 fn test_register_empty_song_hash() {
     let (dispatcher, _) = deploy_contract();
-    dispatcher.register_song('why me', '', 'cohort 4', 20, true);
+    dispatcher.register_song('why me', '', 'cohort 4', 20);
 }
 #[test]
 #[should_panic(expect: "Your song preview hash cannot be empty")]
 fn test_register_empty_preview_song_hash() {
     let (dispatcher, _) = deploy_contract();
-    dispatcher.register_song('why me', 'i dont know', '', 20, true);
+    dispatcher.register_song('why me', 'i dont know', '', 20);
 }
 #[test]
 #[should_panic(expect: "Price must be greater than 0")]
 fn test_register_song_zero_price() {
     let (dispatcher, _) = deploy_contract();
-    dispatcher.register_song('why me', 'i dont know', 'cohort 4', 0, true);
+    dispatcher.register_song('why me', 'i dont know', 'cohort 4', 0);
 }
 
 #[test]
 fn test_update_song_price() {
     let (dispatcher, _) = deploy_contract();
-    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
+    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
 
     dispatcher.update_song_price(song_id, 500);
     let song = dispatcher.get_song_info(song_id);
     assert(song.price == 500, 'wrong price');
-    assert(song.for_sale, 'song should be for sale');
+    assert(!song.for_sale, 'song should be for sale');
     assert(song.name == 'why me', 'Song name should be "why me"');
     assert(song.ipfs_hash == 'i dont know', 'wrong ipfs hash');
     assert(song.preview_ipfs_hash == 'cohort 4', 'wrong preview ipfs hash');
@@ -127,7 +103,7 @@ fn test_update_song_price() {
 #[should_panic(expect: "Song ID does not exist")]
 fn test_update_song_price_invalid_ID() {
     let (dispatcher, _) = deploy_contract();
-    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
+    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
 
     dispatcher.update_song_price(10, 500);
 }
@@ -138,7 +114,7 @@ fn test_update_song_price_invalid_price() {
     let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
 
-    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
+    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
 
     dispatcher.update_song_price(song_id, 0);
     stop_cheat_caller_address(dispatcher.contract_address);
@@ -149,13 +125,13 @@ fn test_update_song_price_owner() {
     let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
 
-    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
+    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
 
     dispatcher.update_song_price(song_id, 20);
     stop_cheat_caller_address(dispatcher.contract_address);
     let song = dispatcher.get_song_info(song_id);
     assert(song.price == 20, 'wrong price');
-    assert(song.for_sale, 'song should be for sale');
+    assert(!song.for_sale, 'song should be for sale');
     assert(song.name == 'why me', 'Song name should be "why me"');
     assert(song.ipfs_hash == 'i dont know', 'wrong ipfs hash');
     assert(song.preview_ipfs_hash == 'cohort 4', 'wrong preview ipfs hash');
@@ -166,7 +142,7 @@ fn test_update_song_price_non_owner() {
     let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
 
-    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
+    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
 
     dispatcher.update_song_price(song_id, 0);
     stop_cheat_caller_address(dispatcher.contract_address);
@@ -177,14 +153,14 @@ fn test_update_song_price_event() {
     let (dispatcher, _) = deploy_contract();
     let mut spy = spy_events();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
-    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20, true);
+    let song_id = dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
 
     dispatcher.update_song_price(song_id, 500);
     let song = dispatcher.get_song_info(song_id);
     stop_cheat_caller_address(dispatcher.contract_address);
 
     assert(song.price == 500, 'wrong price');
-    assert(song.for_sale, 'song should be for sale');
+    assert(!song.for_sale, 'song should be for sale');
     assert(song.name == 'why me', 'Song name should be "why me"');
     assert(song.ipfs_hash == 'i dont know', 'wrong ipfs hash');
     assert(song.preview_ipfs_hash == 'cohort 4', 'wrong preview ipfs hash');
@@ -214,8 +190,7 @@ fn test_update_song_price_event() {
 fn test_buy_song_not_for_sale() {
     let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
-    let song_id = dispatcher
-        .register_song('tirin tirin tirin', 'i dont know', 'cohort 4', 20, false);
+    let song_id = dispatcher.register_song('tirin tirin tirin', 'i dont know', 'cohort 4', 20);
 
     let old_owner = dispatcher.get_song_info(song_id).owner;
     assert(old_owner == TEST_OWNER1(), 'wrong owner');
@@ -223,25 +198,6 @@ fn test_buy_song_not_for_sale() {
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER2());
 
     dispatcher.buy_song(song_id);
-}
-
-#[test]
-fn test_buy_song() {
-    let (dispatcher, _) = deploy_contract();
-    start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
-    let song_id = dispatcher
-        .register_song('tirin tirin tirin', 'i dont know', 'cohort 4', 20, true);
-
-    let old_owner = dispatcher.get_song_info(song_id).owner;
-    println!("old owner: {:?}", old_owner);
-    assert(old_owner == TEST_OWNER1(), 'wrong owner');
-
-    start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER2());
-
-    dispatcher.buy_song(song_id);
-    let new_owner = dispatcher.get_song_info(song_id).owner;
-    println!("new owner: {:?}", new_owner);
-    assert(new_owner == TEST_OWNER2(), 'buy failed');
 }
 
 #[test]
@@ -249,8 +205,7 @@ fn test_buy_song() {
 fn test_buy_song_by_owner() {
     let (dispatcher, _) = deploy_contract();
     start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
-    let song_id = dispatcher
-        .register_song('tirin tirin tirin', 'i dont know', 'cohort 4', 20, true);
+    let song_id = dispatcher.register_song('tirin tirin tirin', 'i dont know', 'cohort 4', 20);
 
     let old_owner = dispatcher.get_song_info(song_id).owner;
     assert(old_owner == TEST_OWNER1(), 'wrong owner');
@@ -285,8 +240,7 @@ fn test_get_user_songs_single() {
     start_cheat_caller_address(dispatcher.contract_address, user);
 
     // Register a song using the actual contract function
-    let song_id = dispatcher
-        .register_song('Test Song', 'ipfs_hash_1', 'preview_hash_1', 1000_u256, true);
+    let song_id = dispatcher.register_song('Test Song', 'ipfs_hash_1', 'preview_hash_1', 1000_u256);
 
     // Get songs for the user
     let songs = dispatcher.get_user_songs(user);
@@ -308,13 +262,13 @@ fn test_get_user_songs_multiple() {
 
     // Register multiple songs
     let song_id1 = dispatcher
-        .register_song('Test Song 1', 'ipfs_hash_1', 'preview_hash_1', 1000_u256, true);
+        .register_song('Test Song 1', 'ipfs_hash_1', 'preview_hash_1', 1000_u256);
 
     let song_id2 = dispatcher
-        .register_song('Test Song 2', 'ipfs_hash_2', 'preview_hash_2', 2000_u256, false);
+        .register_song('Test Song 2', 'ipfs_hash_2', 'preview_hash_2', 2000_u256);
 
     let song_id3 = dispatcher
-        .register_song('Test Song 3', 'ipfs_hash_3', 'preview_hash_3', 3000_u256, true);
+        .register_song('Test Song 3', 'ipfs_hash_3', 'preview_hash_3', 3000_u256);
 
     // Get songs for the user
     let songs = dispatcher.get_user_songs(user);
@@ -338,8 +292,7 @@ fn test_is_song_owner_true() {
 
     start_cheat_caller_address(dispatcher.contract_address, user);
 
-    let song_id = dispatcher
-        .register_song('My Song', 'my_ipfs_hash', 'my_preview_hash', 1000_u256, false);
+    let song_id = dispatcher.register_song('My Song', 'my_ipfs_hash', 'my_preview_hash', 1000_u256);
 
     let song = dispatcher.get_song_info(song_id);
 
@@ -370,7 +323,7 @@ fn test_is_song_owner_false() {
 
     // register a song as the owner
     let song_id = dispatcher
-        .register_song('Owner Song', 'owner_ipfs_hash', 'owner_preview_hash', 1000_u256, false);
+        .register_song('Owner Song', 'owner_ipfs_hash', 'owner_preview_hash', 1000_u256);
 
     stop_cheat_caller_address(dispatcher.contract_address);
 

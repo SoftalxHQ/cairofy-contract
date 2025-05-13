@@ -4,22 +4,23 @@
 pub mod CairofyV0 {
     use cairofy_contract::events::Events::{SongPriceUpdated, Song_Registered};
     use cairofy_contract::interfaces::ICairofy::ICairofy;
-    use cairofy_contract::structs::Structs::Song;
+    use cairofy_contract::structs::Structs::{Song, User, UserSubscription};
     use core::num::traits::Zero;
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::security::pausable::PausableComponent;
-    use openzeppelin::token::erc20::interface::{
-        ERC20ABIDispatcher, ERC20ABIDispatcherTrait, IERC20Dispatcher, IERC20DispatcherTrait,
-        IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait,
-    };
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
-    use starknet::{ClassHash, ContractAddress, get_caller_address};
-    // use OwnableComponent::InternalTrait;
+    use starknet::{
+        ClassHash, ContractAddress, contract_address_const, get_block_timestamp, get_caller_address,
+        get_contract_address,
+    };
+
+    const SUBSCRIPTION_FEE: u256 = 20_000_000_000_000_000_000_000;
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -51,6 +52,9 @@ pub mod CairofyV0 {
         user_song_count: Map<ContractAddress, u64>,
         user_song_ids: Map<(ContractAddress, u64), u64>,
         token_addr: ContractAddress,
+        user_subscription: Map<ContractAddress, UserSubscription>,
+        user: Map<ContractAddress, User>,
+        subscription_count: u64,
     }
 
     #[event]
@@ -107,7 +111,6 @@ pub mod CairofyV0 {
             ipfs_hash: felt252,
             preview_ipfs_hash: felt252,
             price: u256,
-            for_sale: bool,
         ) -> u64 {
             let caller = get_caller_address();
 
@@ -125,7 +128,7 @@ pub mod CairofyV0 {
                 preview_ipfs_hash: preview_ipfs_hash,
                 price: price,
                 owner: caller,
-                for_sale: for_sale,
+                for_sale: false,
             };
             //store the song in the contract storage
             self.songs.write(song_id, song);
@@ -147,7 +150,7 @@ pub mod CairofyV0 {
                             ipfs_hash: ipfs_hash,
                             preview_ipfs_hash: preview_ipfs_hash,
                             price: price,
-                            for_sale: for_sale,
+                            for_sale: false,
                         },
                     ),
                 );
@@ -203,6 +206,78 @@ pub mod CairofyV0 {
                 );
         }
 
+        // fn purchase_song(ref self: ContractState, song_id: u64)-> bool{
+        //     assert!(song_id !)
+        // }
+
+        fn subscribe(ref self: ContractState) -> u64 {
+            let caller = get_caller_address();
+            assert!(caller != contract_address_const::<0>(), "Invalid caller");
+
+            // get user subscription status
+            let user_subscription = self.get_user_subscription(caller);
+            let user = self.get_user(caller);
+            assert!(
+                user.user_id == user_subscription.user_id, "An error occured creating subscription",
+            );
+            // Check if subscription is not expired
+            let current_timestamp = get_block_timestamp();
+            assert!(current_timestamp < user_subscription.expiry_date, "Subscription has expired");
+
+            // Check if user has already subscribed
+            assert!(!user.has_subscribed, "User has an active subscription");
+
+            let payment = self.pay_stark(SUBSCRIPTION_FEE, caller, get_contract_address());
+            assert!(payment == 'PAID', "subscription failed, try again");
+
+            let get_subscription_count = self.get_subscription_count();
+            let subscription_id = get_subscription_count + 1;
+
+            self.update_subscription_details(caller);
+            self.update_user(caller);
+
+            subscription_id
+        }
+
+        fn update_subscription_details(
+            ref self: ContractState, user: ContractAddress,
+        ) -> UserSubscription {
+            let user_subscription = self.get_user_subscription(user);
+
+            let new_subscription = UserSubscription {
+                start_date: get_block_timestamp(),
+                expiry_date: get_block_timestamp() + (30 * 86400),
+                user: user,
+                subscription_id: self.get_subscription_count() + 1,
+                user_id: user_subscription.user_id,
+            };
+
+            self.user_subscription.write(user, new_subscription);
+            new_subscription
+        }
+
+        fn update_user(ref self: ContractState, caller: ContractAddress) -> User {
+            let user = self.get_user(caller);
+            let update_user = User { user_id: user.user_id, user: caller, has_subscribed: true };
+            self.user.write(caller, update_user);
+            update_user
+        }
+
+        fn get_user(self: @ContractState, caller: ContractAddress) -> User {
+            assert!(caller != contract_address_const::<0>(), "Invalid caller address");
+            let user = self.user.read(caller);
+            user
+        }
+
+        fn get_user_subscription(self: @ContractState, user: ContractAddress) -> UserSubscription {
+            assert!(user != contract_address_const::<0>(), "user is invalid, please try again");
+            self.user_subscription.read(user)
+        }
+
+        fn get_subscription_count(self: @ContractState) -> u64 {
+            self.subscription_count.read()
+        }
+
         // TODO: Implement function to get the preview hash of a song
         fn get_preview(self: @ContractState, song_id: u64) -> felt252 {
             // Validate song ID
@@ -213,18 +288,32 @@ pub mod CairofyV0 {
             let song = self.songs.read(song_id);
             song.preview_ipfs_hash
         }
+        fn set_song_for_sale(ref self: ContractState, song_id: u64) {
+            // Validate song ID
+            let total_songs = self.song_count.read();
+            assert!(song_id <= total_songs, "Song ID does not exist");
+
+            // Check if the caller is the owner of the song
+            let caller = get_caller_address();
+            let mut song = self.songs.read(song_id);
+            assert!(song.owner == caller, "Only the owner can set the song for sale");
+            assert!(!song.for_sale, "Song is already for sale");
+
+            // Set the song for sale
+            song.for_sale = true;
+            self.songs.write(song_id, song);
+        }
 
         // TODO: Implement function to buy a song and transfer ownership
         fn buy_song(ref self: ContractState, song_id: u64) -> felt252 {
             let buyer = get_caller_address();
 
-            // Validate song ID
-            let total_songs = self.song_count.read();
-            assert!(song_id <= total_songs, "Song ID does not exist");
-
             let mut song = self.songs.read(song_id);
             assert!(song.for_sale, "Song is not for sale");
-            assert!(song.owner != buyer, "You can't buy your own song");
+            assert!(song.owner != buyer, "You cannot buy your own song");
+
+            let pay_stark = self.pay_stark(song.price, buyer, song.owner);
+            assert!(pay_stark == 'PAID', "Payment failed, please try again");
 
             // Update song mapping
             let old_owner = song.owner;
@@ -279,6 +368,29 @@ pub mod CairofyV0 {
             // check if the user is the owner of the song
             let song = self.songs.read(song_id);
             song.owner == user
+        }
+    }
+
+    #[generate_trait]
+    impl Private of PrivateTrait {
+        fn pay_stark(
+            ref self: ContractState,
+            amount: u256,
+            caller: ContractAddress,
+            recipient: ContractAddress,
+        ) -> felt252 {
+            let strk_token = IERC20Dispatcher { contract_address: self.token_addr.read() };
+
+            // Check allowance to ensure the contract can transfer tokens
+            let contract_address = get_contract_address();
+            let subscriber = get_caller_address();
+            let allowed_amount = strk_token.allowance(subscriber, contract_address);
+            assert(allowed_amount >= amount, 'Insufficient allowance');
+
+            // Transfer the pool creation fee from creator to the contract
+            strk_token.transfer_from(caller, recipient, amount);
+
+            'PAID'
         }
     }
 }
