@@ -57,16 +57,13 @@ pub mod CairofyV0 {
         user_subscription: Map<ContractAddress, UserSubscription>,
         user: Map<ContractAddress, User>,
         subscription_count: u64,
-<<<<<<< HEAD
+        song_stream_count: Map<u64, u64>,
         suscription_history: Map<u64, u64>,
         platform_revenue: u256,
-=======
-        song_stream_count: Map<u64, u64>,
->>>>>>> 2347ef63e0485c4e099815bbf71f6160135c2c76
     }
 
     #[event]
-    #[derive(Drop, starknet::Event)]
+    #[derive(Drop, Destruct, starknet::Event)]
     pub enum Event {
         #[flat]
         PausableEvent: PausableComponent::Event,
@@ -216,6 +213,9 @@ pub mod CairofyV0 {
                 );
         }
 
+        // fn purchase_song(ref self: ContractState, song_id: u64)-> bool{
+        //     assert!(song_id !)
+        // }
 
         fn subscribe(ref self: ContractState) -> u64 {
             let caller = get_caller_address();
@@ -377,6 +377,26 @@ pub mod CairofyV0 {
             song.owner == user
         }
 
+        fn stream_song(ref self: ContractState, song_id: u64) -> felt252 {
+            let user = get_caller_address();
+            assert(!user.is_zero(), 'ZERO_ADDRESS_CALLER');
+            assert(!song_id.is_zero(), 'ZERO_SONG_ID');
+
+            let current_stream_count = self.song_stream_count.read(song_id);
+            let song = self.songs.read(song_id);
+            assert!(!song.name.is_zero() && !song.ipfs_hash.is_zero(), "Song does not exist");
+
+            let get_user = self.get_user(user);
+            assert!(get_user.has_subscribed, "User has not subscribed");
+
+            let user_subscription = self.get_user_subscription(user);
+            assert!(user_subscription.expiry_date > get_block_timestamp(), "Subscription expired");
+
+            self.song_stream_count.write(song_id, current_stream_count + 1);
+
+            song.ipfs_hash
+        }
+
         fn get_platform_stats(self: @ContractState) -> PlatformStats {
             PlatformStats {
                 total_suscribers: self.subscription_count.read(),
@@ -401,28 +421,8 @@ pub mod CairofyV0 {
             popular_songs
         }
 
-        fn get_song_count(self: @ContractState)->u64{
+        fn get_song_count(self: @ContractState) -> u64 {
             self.song_count.read()
-        }
-
-        fn stream_song(ref self: ContractState, song_id: u64) -> felt252 {
-            let user = get_caller_address();
-            assert(!user.is_zero(), 'ZERO_ADDRESS_CALLER');
-            assert(!song_id.is_zero(), 'ZERO_SONG_ID');
-
-            let current_stream_count = self.song_stream_count.read(song_id);
-            let song = self.songs.read(song_id);
-            assert!(!song.name.is_zero() && !song.ipfs_hash.is_zero(), "Song does not exist");
-
-            let get_user = self.get_user(user);
-            assert!(get_user.has_subscribed, "User has not subscribed");
-
-            let user_subscription = self.get_user_subscription(user);
-            assert!(user_subscription.expiry_date > get_block_timestamp(), "Subscription expired");
-
-            self.song_stream_count.write(song_id, current_stream_count + 1);
-
-            song.ipfs_hash
         }
     }
 

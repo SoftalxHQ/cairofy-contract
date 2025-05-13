@@ -382,7 +382,7 @@ fn test_get_popular_songs_all_songs() {
     dispatcher.register_song('why me', 'i dont know', 'cohort 4', 20);
 
     let total_songs = dispatcher.get_song_count();
-    let limit: u64 = total_songs + 2;
+    let limit: u64 = total_songs;
 
     let popular_songs = dispatcher.get_popular_songs_stats(limit);
 
