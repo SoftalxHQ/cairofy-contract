@@ -4,7 +4,9 @@
 pub mod CairofyV0 {
     use cairofy_contract::events::Events::{SongPriceUpdated, Song_Registered};
     use cairofy_contract::interfaces::ICairofy::ICairofy;
-    use cairofy_contract::structs::Structs::{Song, User, UserSubscription};
+    use cairofy_contract::structs::Structs::{
+        PlatformStats, Song, SongStats, User, UserSubscription,
+    };
     use core::num::traits::Zero;
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::security::pausable::PausableComponent;
@@ -55,6 +57,8 @@ pub mod CairofyV0 {
         user_subscription: Map<ContractAddress, UserSubscription>,
         user: Map<ContractAddress, User>,
         subscription_count: u64,
+        suscription_history: Map<u64, u64>,
+        platform_revenue: u256,
     }
 
     #[event]
@@ -369,6 +373,35 @@ pub mod CairofyV0 {
             let song = self.songs.read(song_id);
             song.owner == user
         }
+
+        fn get_platform_stats(self: @ContractState) -> PlatformStats {
+            PlatformStats {
+                total_suscribers: self.subscription_count.read(),
+                platform_revenue: self.platform_revenue.read(),
+                // total_plays: ,
+            }
+        }
+
+        fn get_popular_songs_stats(self: @ContractState, limit: u64) -> Array<SongStats> {
+            let mut popular_songs = array![];
+            let total_songs = self.song_count.read();
+
+            let mut i: u64 = 0;
+            while i < total_songs && i < limit {
+                let song = self.songs.read(i + 1);
+                let song_stats = SongStats {
+                    song_id: i + 1, name: song.name, play_count: 0, revenue_generated: 0,
+                };
+                popular_songs.append(song_stats);
+                i += 1;
+            }
+            popular_songs
+        }
+
+        fn get_song_count(self: @ContractState)->u64{
+            self.song_count.read()
+        }
+
     }
 
     #[generate_trait]

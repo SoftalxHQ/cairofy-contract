@@ -1,4 +1,4 @@
-use cairofy_contract::structs::Structs::{Song, User, UserSubscription};
+use cairofy_contract::structs::Structs::{PlatformStats, Song, SongStats, User, UserSubscription};
 use starknet::ContractAddress;
 
 #[starknet::interface]
@@ -11,6 +11,7 @@ pub trait ICairofy<TContractState> {
         price: u256,
     ) -> u64;
     fn get_song_info(self: @TContractState, song_id: u64) -> Song;
+    fn get_song_count(self: @TContractState) -> u64;
     fn update_song_price(ref self: TContractState, song_id: u64, new_price: u256);
     fn get_preview(self: @TContractState, song_id: u64) -> felt252;
     fn buy_song(ref self: TContractState, song_id: u64) -> felt252;
@@ -26,4 +27,7 @@ pub trait ICairofy<TContractState> {
     // fn purchase_song(ref self: TContractState, song_id: u64)-> bool;
     fn get_user_songs(self: @TContractState, user: ContractAddress) -> Array<u64>;
     fn is_song_owner(self: @TContractState, song_id: u64) -> bool;
+
+    fn get_platform_stats(self: @TContractState) -> PlatformStats;
+    fn get_popular_songs_stats(self: @TContractState, limit: u64) -> Array<SongStats>;
 }
