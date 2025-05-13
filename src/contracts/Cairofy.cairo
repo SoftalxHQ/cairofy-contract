@@ -57,8 +57,12 @@ pub mod CairofyV0 {
         user_subscription: Map<ContractAddress, UserSubscription>,
         user: Map<ContractAddress, User>,
         subscription_count: u64,
+<<<<<<< HEAD
         suscription_history: Map<u64, u64>,
         platform_revenue: u256,
+=======
+        song_stream_count: Map<u64, u64>,
+>>>>>>> 2347ef63e0485c4e099815bbf71f6160135c2c76
     }
 
     #[event]
@@ -127,6 +131,7 @@ pub mod CairofyV0 {
             self.song_count.write(song_id);
 
             let song = Song {
+                id: song_id,
                 name: name,
                 ipfs_hash: ipfs_hash,
                 preview_ipfs_hash: preview_ipfs_hash,
@@ -184,6 +189,7 @@ pub mod CairofyV0 {
             assert!(song.owner == caller, "Only the owner can update the song price");
 
             let song = Song {
+                id: song_id,
                 name: song.name,
                 ipfs_hash: song.ipfs_hash,
                 preview_ipfs_hash: song.preview_ipfs_hash,
@@ -210,9 +216,6 @@ pub mod CairofyV0 {
                 );
         }
 
-        // fn purchase_song(ref self: ContractState, song_id: u64)-> bool{
-        //     assert!(song_id !)
-        // }
 
         fn subscribe(ref self: ContractState) -> u64 {
             let caller = get_caller_address();
@@ -402,6 +405,25 @@ pub mod CairofyV0 {
             self.song_count.read()
         }
 
+        fn stream_song(ref self: ContractState, song_id: u64) -> felt252 {
+            let user = get_caller_address();
+            assert(!user.is_zero(), 'ZERO_ADDRESS_CALLER');
+            assert(!song_id.is_zero(), 'ZERO_SONG_ID');
+
+            let current_stream_count = self.song_stream_count.read(song_id);
+            let song = self.songs.read(song_id);
+            assert!(!song.name.is_zero() && !song.ipfs_hash.is_zero(), "Song does not exist");
+
+            let get_user = self.get_user(user);
+            assert!(get_user.has_subscribed, "User has not subscribed");
+
+            let user_subscription = self.get_user_subscription(user);
+            assert!(user_subscription.expiry_date > get_block_timestamp(), "Subscription expired");
+
+            self.song_stream_count.write(song_id, current_stream_count + 1);
+
+            song.ipfs_hash
+        }
     }
 
     #[generate_trait]
