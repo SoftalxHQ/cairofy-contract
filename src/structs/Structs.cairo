@@ -3,6 +3,7 @@ use starknet::ContractAddress;
 
 #[derive(Clone, Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
 pub struct Song {
+    pub id: u64,
     pub name: felt252,
     pub ipfs_hash: felt252,
     pub preview_ipfs_hash: felt252,
