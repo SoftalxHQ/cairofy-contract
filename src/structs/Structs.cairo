@@ -23,6 +23,7 @@ pub struct UserSubscription {
 
 #[derive(Clone, Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
 pub struct User {
+    pub user_name: felt252,
     pub user: ContractAddress,
     pub has_subscribed: bool,
     pub user_id: u256,
@@ -42,8 +43,8 @@ pub struct SongStats {
     pub play_count: u64,
     pub revenue_generated: u64,
 }
+// #[derive(Clone, Debug, Drop, PartialEq, Serde)]
+// pub struct RevenueReport {
+//     revenue_by_artist: Array<(u64, u64)>,
+// }
 
-#[derive(Clone, Debug, Drop, PartialEq, Serde)]
-pub struct RevenueReport {
-    revenue_by_artist: Array<(u64, u64)>,
-}

@@ -213,9 +213,6 @@ pub mod CairofyV0 {
                 );
         }
 
-        // fn purchase_song(ref self: ContractState, song_id: u64)-> bool{
-        //     assert!(song_id !)
-        // }
 
         fn subscribe(ref self: ContractState) -> u64 {
             let caller = get_caller_address();
@@ -265,7 +262,12 @@ pub mod CairofyV0 {
 
         fn update_user(ref self: ContractState, caller: ContractAddress) -> User {
             let user = self.get_user(caller);
-            let update_user = User { user_id: user.user_id, user: caller, has_subscribed: true };
+            let update_user = User {
+                user_name: user.user_name,
+                user_id: user.user_id,
+                user: caller,
+                has_subscribed: true,
+            };
             self.user.write(caller, update_user);
             update_user
         }
