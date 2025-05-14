@@ -23,6 +23,7 @@ pub struct UserSubscription {
 
 #[derive(Clone, Copy, Debug, Drop, PartialEq, Serde, starknet::Store)]
 pub struct User {
+    pub user_name: felt252,
     pub user: ContractAddress,
     pub has_subscribed: bool,
     pub user_id: u256,
