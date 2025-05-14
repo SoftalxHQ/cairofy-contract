@@ -48,3 +48,4 @@ pub struct SongStats {
 //     revenue_by_artist: Array<(u64, u64)>,
 // }
 
+
