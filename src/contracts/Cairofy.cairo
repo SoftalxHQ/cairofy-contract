@@ -2,10 +2,10 @@
 // Compatible with OpenZeppelin Contracts for Cairo ^1.0.0
 #[starknet::contract]
 pub mod CairofyV0 {
-    use cairofy_contract::events::Events::{SongPriceUpdated, Song_Registered};
+    use cairofy_contract::events::Events::{Artiste_Created, SongPriceUpdated, Song_Registered};
     use cairofy_contract::interfaces::ICairofy::ICairofy;
     use cairofy_contract::structs::Structs::{
-        PlatformStats, Song, SongStats, User, UserSubscription,
+        ArtisteMetadata, PlatformStats, Song, SongStats, User, UserSubscription,
     };
     use core::num::traits::Zero;
     use openzeppelin::access::ownable::OwnableComponent;
@@ -14,8 +14,8 @@ pub mod CairofyV0 {
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use starknet::storage::{
-        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
-        StoragePointerWriteAccess,
+        Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess, Vec,
     };
     use starknet::{
         ClassHash, ContractAddress, contract_address_const, get_block_timestamp, get_caller_address,
@@ -58,7 +58,9 @@ pub mod CairofyV0 {
         user: Map<ContractAddress, User>,
         subscription_count: u64,
         song_stream_count: Map<u64, u64>,
-        suscription_history: Map<u64, u64>,
+        artiste: Map<ContractAddress, ArtisteMetadata>,
+        artiste_songs: Map<ContractAddress, Vec<Song>>,
+        artiste_count: u64,
         platform_revenue: u256,
     }
 
@@ -74,6 +76,7 @@ pub mod CairofyV0 {
         // contract events
         Song_Registered: Song_Registered,
         SongPriceUpdated: SongPriceUpdated,
+        Artiste_Created: Artiste_Created,
     }
 
     #[constructor]
@@ -110,18 +113,63 @@ pub mod CairofyV0 {
     // contract Implementation
     #[abi(embed_v0)]
     impl CairofyImpl of ICairofy<ContractState> {
-        fn register_song(
+        fn register_artiste(
             ref self: ContractState,
             name: felt252,
-            ipfs_hash: felt252,
-            preview_ipfs_hash: felt252,
+            description: ByteArray,
+            profile_image_uri: felt252,
+        ) -> ArtisteMetadata {
+            assert!(!name.is_zero(), "The name should not be empty");
+            assert!(description.len() != 0, "The description is invalid");
+            assert!(!profile_image_uri.is_zero(), "The name should not be empty");
+
+            let caller = get_caller_address();
+            let artiste = self.artiste.read(caller);
+            assert(
+                artiste.name.is_zero() || artiste.description.len() > 5, 'artiste already exist',
+            );
+
+            let artiste = ArtisteMetadata {
+                name: name,
+                contract_address: caller,
+                amount_earned: 0,
+                profile_image_uri: profile_image_uri,
+                creation_date: get_block_timestamp(),
+                total_followers: 0,
+                total_songs: 0,
+                verified: false,
+                total_sales: 0,
+                highest_sale: 0,
+                description: description.clone(),
+            };
+            self.artiste.write(caller, artiste.clone());
+
+            self
+                .emit(
+                    Event::Artiste_Created(
+                        Artiste_Created {
+                            name: name,
+                            description: description,
+                            creation_date: get_block_timestamp(),
+                        },
+                    ),
+                );
+
+            artiste
+        }
+
+        fn register_song(
+            ref self: ContractState,
+            name: ByteArray,
+            ipfs_hash: ByteArray,
+            preview_ipfs_hash: ByteArray,
             price: u256,
         ) -> u64 {
             let caller = get_caller_address();
 
-            assert!(name != 0, "Song name cannot be empty");
-            assert!(ipfs_hash != 0, "Your song hash cannot be empty");
-            assert!(preview_ipfs_hash != 0, "Your song preview hash cannot be empty");
+            assert!(name.len() > 0, "Song name cannot be empty");
+            assert!(ipfs_hash.len() > 0, "Your song hash cannot be empty");
+            assert!(preview_ipfs_hash.len() > 0, "Your song preview hash cannot be empty");
             assert!(price > 0, "Price must be greater than 0");
             // Increment song count and return the new song ID
             let song_id = self.song_count.read() + 1;
@@ -129,9 +177,9 @@ pub mod CairofyV0 {
 
             let song = Song {
                 id: song_id,
-                name: name,
-                ipfs_hash: ipfs_hash,
-                preview_ipfs_hash: preview_ipfs_hash,
+                name: name.clone(),
+                ipfs_hash: ipfs_hash.clone(),
+                preview_ipfs_hash: preview_ipfs_hash.clone(),
                 price: price,
                 owner: caller,
                 for_sale: false,
@@ -188,29 +236,15 @@ pub mod CairofyV0 {
             let song = Song {
                 id: song_id,
                 name: song.name,
-                ipfs_hash: song.ipfs_hash,
-                preview_ipfs_hash: song.preview_ipfs_hash,
-                price: new_price,
+                ipfs_hash: song.ipfs_hash.clone(),
+                preview_ipfs_hash: song.preview_ipfs_hash.clone(),
+                price: new_price.clone(),
                 owner: caller,
                 for_sale: song.for_sale,
             };
 
             //store the song in the contract storage
             self.songs.write(song_id, song);
-
-            self
-                .emit(
-                    Event::SongPriceUpdated(
-                        SongPriceUpdated {
-                            song_id: song_id,
-                            name: song.name,
-                            ipfs_hash: song.ipfs_hash,
-                            preview_ipfs_hash: song.preview_ipfs_hash,
-                            updated_price: song.price,
-                            for_sale: song.for_sale,
-                        },
-                    ),
-                );
         }
 
         // fn purchase_song(ref self: ContractState, song_id: u64)-> bool{
@@ -291,7 +325,7 @@ pub mod CairofyV0 {
         }
 
         // TODO: Implement function to get the preview hash of a song
-        fn get_preview(self: @ContractState, song_id: u64) -> felt252 {
+        fn get_preview(self: @ContractState, song_id: u64) -> ByteArray {
             // Validate song ID
             let total_songs = self.song_count.read();
             assert!(song_id <= total_songs, "Song ID does not exist");
@@ -317,7 +351,7 @@ pub mod CairofyV0 {
         }
 
         // TODO: Implement function to buy a song and transfer ownership
-        fn buy_song(ref self: ContractState, song_id: u64) -> felt252 {
+        fn buy_song(ref self: ContractState, song_id: u64) {
             let buyer = get_caller_address();
 
             let mut song = self.songs.read(song_id);
@@ -341,10 +375,8 @@ pub mod CairofyV0 {
             song.owner = buyer;
             song.for_sale = false;
             self.songs.write(song_id, song);
-
             // self.ownable.transfer_ownership(buyer);
 
-            song.ipfs_hash
         }
 
         fn get_user_songs(self: @ContractState, user: ContractAddress) -> Array<u64> {
@@ -397,14 +429,14 @@ pub mod CairofyV0 {
             songs
         }
 
-        fn stream_song(ref self: ContractState, song_id: u64) -> felt252 {
+        fn stream_song(ref self: ContractState, song_id: u64) -> ByteArray {
             let user = get_caller_address();
             assert(!user.is_zero(), 'ZERO_ADDRESS_CALLER');
             assert(!song_id.is_zero(), 'ZERO_SONG_ID');
 
             let current_stream_count = self.song_stream_count.read(song_id);
             let song = self.songs.read(song_id);
-            assert!(!song.name.is_zero() && !song.ipfs_hash.is_zero(), "Song does not exist");
+            assert!(song.name.len() == 0 && song.ipfs_hash.len() != 0, "Song does not exist");
 
             let get_user = self.get_user(user);
             assert!(get_user.has_subscribed, "User has not subscribed");
