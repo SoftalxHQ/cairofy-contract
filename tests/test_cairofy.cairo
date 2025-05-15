@@ -474,3 +474,59 @@ fn test_get_all_songs() {
     let all_songs = dispatcher.get_all_songs();
     assert(all_songs.len() == 12, 'An error occurred');
 }
+
+
+#[test]
+fn test_can_stream_owner() {
+    let (dispatcher, _) = deploy_contract();
+
+    // Register a song as TEST_OWNER1
+    start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
+    let song_id = dispatcher.register_song('Test Song', 'ipfs_hash', 'preview_hash', 20);
+
+    // Owner should always be able to stream their song
+    let can_stream = dispatcher.can_stream(TEST_OWNER1(), song_id);
+    assert(can_stream, 'Owner should be able to stream');
+    stop_cheat_caller_address(dispatcher.contract_address);
+}
+
+#[test]
+fn test_streaming_access_controls() {
+    let (dispatcher, token_dispatcher) = deploy_contract();
+
+    // Register a song as TEST_OWNER1
+    start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
+    let song_id = dispatcher.register_song('Test Song', 'ipfs_hash', 'preview_hash', 20);
+
+    // TEST_OWNER2 should not have access initially
+    let can_stream_before = dispatcher.can_stream(TEST_OWNER2(), song_id);
+    assert!(!can_stream_before, "Should not have access initially");
+
+    // Owner grants access to TEST_OWNER2
+    dispatcher.grant_streaming_access(TEST_OWNER2(), song_id);
+    dispatcher.can_stream(TEST_OWNER2(), song_id);
+
+    // Owner revokes access
+    dispatcher.revoke_streaming_access(TEST_OWNER2(), song_id);
+    let can_stream_revoked = dispatcher.can_stream(TEST_OWNER2(), song_id);
+    assert(!can_stream_revoked, 'Access should be revoked');
+
+    stop_cheat_caller_address(dispatcher.contract_address);
+}
+
+#[test]
+#[should_panic(expect: "Only song owner can grant streaming access")]
+fn test_grant_access_not_owner() {
+    let (dispatcher, _) = deploy_contract();
+
+    // Register a song as TEST_OWNER1
+    start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER1());
+    let song_id = dispatcher.register_song('Test Song', 'ipfs_hash', 'preview_hash', 20);
+    stop_cheat_caller_address(dispatcher.contract_address);
+
+    // TEST_OWNER2 tries to grant access (should fail)
+    start_cheat_caller_address(dispatcher.contract_address, TEST_OWNER2());
+    dispatcher.grant_streaming_access(TEST_OWNER3(), song_id);
+    stop_cheat_caller_address(dispatcher.contract_address);
+}
+

@@ -23,6 +23,8 @@ pub mod CairofyV0 {
     };
 
     const SUBSCRIPTION_FEE: u256 = 20_000_000_000_000_000_000_000;
+    const PREMIUM_SUBSCRIPTION_FEE: u256 = 40_000_000_000_000_000_000_000;
+    const ROYALTY_PERCENTAGE: u256 = 70; // 70% of streaming revenue goes to artist
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -60,6 +62,15 @@ pub mod CairofyV0 {
         song_stream_count: Map<u64, u64>,
         suscription_history: Map<u64, u64>,
         platform_revenue: u256,
+        streaming_access: Map<
+            (ContractAddress, u64), bool,
+        >, // Tracks if user has streaming access to a song
+        streaming_history: Map<
+            (ContractAddress, u64), u64,
+        >, // Tracks number of times a user has streamed a song
+        subscription_tier: Map<
+            ContractAddress, u8,
+        > // Tracks user's subscription tier (0=none, 1=basic, 2=premium)
     }
 
     #[event]
@@ -74,6 +85,31 @@ pub mod CairofyV0 {
         // contract events
         Song_Registered: Song_Registered,
         SongPriceUpdated: SongPriceUpdated,
+        SubscriptionRenewed: SubscriptionRenewed,
+        SubscriptionTierChanged: SubscriptionTierChanged,
+        RoyaltyDistributed: RoyaltyDistributed,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct SubscriptionRenewed {
+        pub user: ContractAddress,
+        pub subscription_id: u64,
+        pub expiry_date: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct SubscriptionTierChanged {
+        pub user: ContractAddress,
+        pub old_tier: u8,
+        pub new_tier: u8,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct RoyaltyDistributed {
+        pub song_id: u64,
+        pub artist: ContractAddress,
+        pub amount: u256,
+        pub total_streams: u64,
     }
 
     #[constructor]
@@ -443,6 +479,239 @@ pub mod CairofyV0 {
 
         fn get_song_count(self: @ContractState) -> u64 {
             self.song_count.read()
+        }
+
+        fn can_stream(self: @ContractState, user: ContractAddress, song_id: u64) -> bool {
+            // First check if user owns the song (owners can always stream)
+            let song = self.get_song_info(song_id);
+            if song.owner == user {
+                return true;
+            }
+
+            // For non-owners, check subscription status
+            let user_subscription = self.get_user_subscription(user);
+            let current_timestamp = get_block_timestamp();
+
+            // Check if subscription is active
+            if current_timestamp >= user_subscription.expiry_date {
+                return false;
+            }
+
+            // Check if user has streaming access
+            self.streaming_access.read((user, song_id))
+        }
+
+        fn log_stream(ref self: ContractState, user: ContractAddress, song_id: u64) {
+            // First check if user owns the song (owners can always stream)
+            let song = self.get_song_info(song_id);
+            if song.owner == user {
+                // Increment streaming count
+                let current_count = self.streaming_history.read((user, song_id));
+                self.streaming_history.write((user, song_id), current_count + 1);
+
+                // Update song stream count
+                let song_streams = self.song_stream_count.read(song_id);
+                self.song_stream_count.write(song_id, song_streams + 1);
+                return;
+            }
+
+            // For non-owners, verify subscription and access
+            let user_subscription = self.get_user_subscription(user);
+            let current_timestamp = get_block_timestamp();
+
+            // Check if subscription is active
+            assert!(current_timestamp < user_subscription.expiry_date, "Subscription has expired");
+
+            // Check if user has streaming access
+            assert!(self.streaming_access.read((user, song_id)), "User cannot stream this song");
+
+            // Increment streaming count
+            let current_count = self.streaming_history.read((user, song_id));
+            self.streaming_history.write((user, song_id), current_count + 1);
+
+            // Update song stream count
+            let song_streams = self.song_stream_count.read(song_id);
+            self.song_stream_count.write(song_id, song_streams + 1);
+        }
+
+        fn grant_streaming_access(ref self: ContractState, user: ContractAddress, song_id: u64) {
+            // Only song owner can grant streaming access
+            let song = self.get_song_info(song_id);
+            let caller = get_caller_address();
+            assert!(song.owner == caller, "Only song owner can grant streaming access");
+
+            self.streaming_access.write((user, song_id), true);
+        }
+
+        fn revoke_streaming_access(ref self: ContractState, user: ContractAddress, song_id: u64) {
+            // Only song owner can revoke streaming access
+            let song = self.get_song_info(song_id);
+            let caller = get_caller_address();
+            assert!(song.owner == caller, "Only song owner can revoke streaming access");
+
+            self.streaming_access.write((user, song_id), false);
+        }
+
+        fn get_streaming_stats(self: @ContractState, user: ContractAddress, song_id: u64) -> u64 {
+            self.streaming_history.read((user, song_id))
+        }
+
+        fn renew_subscription(ref self: ContractState) -> u64 {
+            let caller = get_caller_address();
+            assert!(caller != contract_address_const::<0>(), "Invalid caller");
+
+            // Get user subscription status
+            let user_subscription = self.get_user_subscription(caller);
+            let user = self.get_user(caller);
+            assert!(
+                user.user_id == user_subscription.user_id,
+                "An error occurred renewing subscription",
+            );
+
+            // Get current subscription tier
+            let current_tier = self.subscription_tier.read(caller);
+            let subscription_fee = if current_tier == 2 {
+                PREMIUM_SUBSCRIPTION_FEE
+            } else {
+                SUBSCRIPTION_FEE
+            };
+
+            // Process payment
+            let payment = self.pay_stark(subscription_fee, caller, get_contract_address());
+            assert!(payment == 'PAID', "subscription renewal failed, try again");
+
+            // Update subscription details
+            let new_subscription = UserSubscription {
+                start_date: get_block_timestamp(),
+                expiry_date: get_block_timestamp() + (30 * 86400),
+                user: caller,
+                subscription_id: user_subscription.subscription_id,
+                user_id: user.user_id,
+            };
+
+            self.user_subscription.write(caller, new_subscription);
+
+            // Emit event
+            self
+                .emit(
+                    SubscriptionRenewed {
+                        user: caller,
+                        subscription_id: new_subscription.subscription_id,
+                        expiry_date: new_subscription.expiry_date,
+                    },
+                );
+
+            new_subscription.subscription_id
+        }
+
+        fn upgrade_subscription_tier(ref self: ContractState, new_tier: u8) -> bool {
+            let caller = get_caller_address();
+            assert!(caller != contract_address_const::<0>(), "Invalid caller");
+            assert!(new_tier <= 2, "Invalid subscription tier");
+
+            let current_tier = self.subscription_tier.read(caller);
+            if current_tier == new_tier {
+                return false;
+            }
+
+            // Get user subscription status
+            let user_subscription = self.get_user_subscription(caller);
+            let current_timestamp = get_block_timestamp();
+            assert!(current_timestamp < user_subscription.expiry_date, "Subscription has expired");
+
+            // Calculate upgrade fee
+            let upgrade_fee = if new_tier == 2 {
+                PREMIUM_SUBSCRIPTION_FEE - SUBSCRIPTION_FEE
+            } else {
+                0
+            };
+
+            if upgrade_fee > 0 {
+                let payment = self.pay_stark(upgrade_fee, caller, get_contract_address());
+                assert!(payment == 'PAID', "upgrade payment failed");
+            }
+
+            // Update subscription tier
+            self.subscription_tier.write(caller, new_tier);
+
+            // Emit event
+            self
+                .emit(
+                    SubscriptionTierChanged {
+                        user: caller, old_tier: current_tier, new_tier: new_tier,
+                    },
+                );
+
+            true
+        }
+
+        fn get_subscription_tier(self: @ContractState, user: ContractAddress) -> u8 {
+            self.subscription_tier.read(user)
+        }
+
+        fn distribute_royalties(ref self: ContractState, song_id: u64) -> bool {
+            let caller = get_caller_address();
+            assert!(caller != contract_address_const::<0>(), "Invalid caller");
+
+            // Get song info
+            let song = self.get_song_info(song_id);
+            assert!(song.owner != contract_address_const::<0>(), "Invalid song");
+
+            // Calculate total streams
+            let total_streams: u64 = self.song_stream_count.read(song_id);
+            if total_streams == 0 {
+                return false;
+            }
+
+            // Calculate revenue based on subscription tier
+            let subscription_tier = self.subscription_tier.read(caller);
+            let revenue_per_stream = if subscription_tier == 2 {
+                SUBSCRIPTION_FEE / 1000 // Premium users generate more revenue
+            } else {
+                SUBSCRIPTION_FEE / 2000 // Basic users generate less revenue
+            };
+
+            // Calculate total revenue and artist's share
+            let total_revenue = total_streams.into() * revenue_per_stream;
+            let artist_share = (total_revenue * ROYALTY_PERCENTAGE) / 100;
+
+            // Transfer royalties to artist
+            let strk_token = IERC20Dispatcher { contract_address: self.token_addr.read() };
+            strk_token.transfer(song.owner, artist_share);
+
+            // Update platform revenue
+            let platform_share = total_revenue - artist_share;
+            let current_revenue = self.platform_revenue.read();
+            self.platform_revenue.write(current_revenue + platform_share);
+
+            // Reset stream count
+            self.song_stream_count.write(song_id, 0);
+
+            // Emit event
+            self
+                .emit(
+                    RoyaltyDistributed {
+                        song_id: song_id,
+                        artist: song.owner,
+                        amount: artist_share,
+                        total_streams: total_streams,
+                    },
+                );
+
+            true
+        }
+
+        fn get_royalty_info(self: @ContractState, song_id: u64) -> (u64, u256) {
+            let total_streams: u64 = self.song_stream_count.read(song_id);
+            let subscription_tier = self.subscription_tier.read(get_caller_address());
+            let revenue_per_stream = if subscription_tier == 2 {
+                SUBSCRIPTION_FEE / 1000
+            } else {
+                SUBSCRIPTION_FEE / 2000
+            };
+            let total_revenue = total_streams.into() * revenue_per_stream;
+            let artist_share = (total_revenue * ROYALTY_PERCENTAGE) / 100;
+            (total_streams, artist_share)
         }
     }
 

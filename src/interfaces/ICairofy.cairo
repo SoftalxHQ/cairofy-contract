@@ -32,4 +32,15 @@ pub trait ICairofy<TContractState> {
 
     fn get_platform_stats(self: @TContractState) -> PlatformStats;
     fn get_popular_songs_stats(self: @TContractState, limit: u64) -> Array<SongStats>;
+
+    fn can_stream(self: @TContractState, user: ContractAddress, song_id: u64) -> bool;
+    fn log_stream(ref self: TContractState, user: ContractAddress, song_id: u64);
+    fn grant_streaming_access(ref self: TContractState, user: ContractAddress, song_id: u64);
+    fn revoke_streaming_access(ref self: TContractState, user: ContractAddress, song_id: u64);
+    fn get_streaming_stats(self: @TContractState, user: ContractAddress, song_id: u64) -> u64;
+    fn renew_subscription(ref self: TContractState) -> u64;
+    fn upgrade_subscription_tier(ref self: TContractState, new_tier: u8) -> bool;
+    fn get_subscription_tier(self: @TContractState, user: ContractAddress) -> u8;
+    fn distribute_royalties(ref self: TContractState, song_id: u64) -> bool;
+    fn get_royalty_info(self: @TContractState, song_id: u64) -> (u64, u256);
 }
